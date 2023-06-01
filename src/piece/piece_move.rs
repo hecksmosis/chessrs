@@ -187,34 +187,11 @@ impl PieceMove {
                             && self.is_capture
                             && game[self.end_coords].color() != self.piece.color()))
             }
-            0b11 => {
-                println!("Knight");
-                println!(
-                    "vertical: {}, horizontal: {}, empty: {}",
-                    (self.end_coords.y != self.piece.coords.y
-                        && self.end_coords.x == self.piece.coords.x),
-                    (self.end_coords.y == self.piece.coords.y
-                        && self.end_coords.x != self.piece.coords.x),
-                    game[self.end_coords].is_empty()
-                );
-
-                ((self.end_coords.y != self.piece.coords.y
-                    && self.end_coords.x == self.piece.coords.x)
-                    || (self.end_coords.y == self.piece.coords.y
-                        && self.end_coords.x != self.piece.coords.x))
-                    && ((!self.is_capture && game[self.end_coords].is_empty())
-                        || (!game[self.end_coords].is_empty()
-                            && self.is_capture
-                            && game[self.end_coords].color() != self.piece.color()))
-            }
+            0b11 => true, // The check for the knight is doen in the move purging
             0b100 => {
                 println!("Bishop");
                 println!(
-                    "vertical: {}, horizontal: {}, empty: {}, is_path: {}",
-                    (self.end_coords.y != self.piece.coords.y
-                        && self.end_coords.x == self.piece.coords.x),
-                    (self.end_coords.y == self.piece.coords.y
-                        && self.end_coords.x != self.piece.coords.x),
+                    "empty: {}, is_path: {}",
                     game[self.end_coords].is_empty(),
                     game.is_path(
                         PiecePath::Diagonal,
@@ -223,9 +200,7 @@ impl PieceMove {
                     )
                 );
 
-                (self.end_coords.y != self.piece.coords.y
-                    && self.end_coords.x != self.piece.coords.x)
-                    && game[self.end_coords].is_empty()
+                game[self.end_coords].is_empty()
                     && game.is_path(PiecePath::Diagonal, self.piece.coords, self.end_coords)
             }
             _ => unreachable!(),

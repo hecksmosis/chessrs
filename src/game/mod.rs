@@ -24,160 +24,87 @@ impl Display for Game {
 
 impl Game {
     pub fn make_move(&mut self, coords: Coords) -> Result<(), String> {
-        // First, we must infer the starting piece position from the end position
-        match coords.piece {
-            PieceType::Pawn => {
-                let previous_position =
-                    match PieceMove::from_piece_type(PieceType::Pawn, coords, self) {
-                        Ok(x) => x,
-                        Err(e) => return Err(e),
-                    };
+        let previous_position = match PieceMove::from_piece_type(coords.piece, coords, self) {
+            Ok(x) => x,
+            Err(e) => return Err(e),
+        };
 
-                if !previous_position.is_valid(self) {
-                    return Err("AAB: Invalid move".to_string());
-                }
-
-                self[previous_position.piece.coords.y][previous_position.piece.coords.x] =
-                    Piece::empty();
-                println!("turn {}", self.turn);
-                let color_mask = if self.turn == 1 { 0b1000 } else { 0 };
-                self[coords.y][coords.x] =
-                    Piece::from_coords(coords.piece as u8 ^ color_mask, coords);
-            }
-            PieceType::Rook => {
-                let previous_position =
-                    match PieceMove::from_piece_type(PieceType::Rook, coords, self) {
-                        Ok(x) => x,
-                        Err(e) => return Err(e),
-                    };
-
-                self[previous_position.piece.coords.y][previous_position.piece.coords.x] =
-                    Piece::empty();
-                println!("turn {}", self.turn);
-                let color_mask = if self.turn == 1 { 0b1000 } else { 0 };
-                self[coords.y][coords.x] =
-                    Piece::from_coords(coords.piece as u8 ^ color_mask, coords);
-            }
-            PieceType::Knight => {
-                let previous_position =
-                    match PieceMove::from_piece_type(PieceType::Knight, coords, self) {
-                        Ok(x) => x,
-                        Err(e) => return Err(e),
-                    };
-
-                self[previous_position.piece.coords.x][previous_position.piece.coords.y] =
-                    Piece::empty();
-                println!("turn {}", self.turn);
-                let color_mask = if self.turn == 1 { 0b1000 } else { 0 };
-                self[coords.y][coords.x] =
-                    Piece::from_coords(coords.piece as u8 ^ color_mask, coords);
-            }
-            PieceType::Bishop => {
-                // Can move any number of squares diagonally
-                // Check if there are any pieces in the way
-                let previous_position =
-                    match PieceMove::from_piece_type(PieceType::Bishop, coords, self) {
-                        Ok(x) => x,
-                        Err(e) => return Err(e),
-                    };
-
-                self[previous_position.piece.coords.x][previous_position.piece.coords.y] =
-                    Piece::empty();
-                println!("turn {}", self.turn);
-                let color_mask = if self.turn == 1 { 0b1000 } else { 0 };
-                self[coords.y][coords.x] =
-                    Piece::from_coords(coords.piece as u8 ^ color_mask, coords);
-            }
-            _ => todo!(),
+        if !previous_position.is_valid(self) {
+            return Err("Invalid move".to_string());
         }
+
+        let color_mask = if self.turn == 1 { 0b1000 } else { 0 };
+        let piece = Piece::from_coords(coords.piece as u8 ^ color_mask, coords);
+
+        self[previous_position.piece.coords.y][previous_position.piece.coords.x] = Piece::empty();
+        self[coords.y][coords.x] = piece;
+
         Ok(())
     }
 
     pub fn is_path(&self, path_type: PiecePath, start_coords: Coords, end_coords: Coords) -> bool {
         match path_type {
             PiecePath::Straight => {
-                println!("{:?} -> {:?}", start_coords, end_coords);
                 if start_coords.x == end_coords.x {
-                    println!("moving in y");
-                    println!("{}", self);
-                    let mut y = if start_coords.y < end_coords.y {
-                        start_coords.y + 1
+                    let range = if start_coords.y < end_coords.y {
+                        (start_coords.y + 1)..end_coords.y
                     } else {
-                        start_coords.y - 1
+                        (end_coords.y + 1)..start_coords.y
                     };
-                    println!("y: {}", y);
-                    while y != end_coords.y {
-                        println!(
-                            "Piece: {}, at ({}, {})",
-                            self[y][start_coords.x], start_coords.x, y
-                        );
+                    for y in range.step_by(1) {
                         if !self[y][start_coords.x].is_empty() {
                             return false;
                         }
-                        y = if start_coords.y < end_coords.y {
-                            y + 1
-                        } else {
-                            y - 1
-                        };
                     }
                     return true;
                 } else if start_coords.y == end_coords.y {
-                    println!("moving in x");
-                    println!("{}", self);
-                    let mut x = if start_coords.x < end_coords.x {
-                        start_coords.x + 1
+                    let range = if start_coords.x < end_coords.x {
+                        (start_coords.x + 1)..end_coords.x
                     } else {
-                        start_coords.x - 1
+                        (end_coords.x + 1)..start_coords.x
                     };
-                    println!("y: {}", x);
-                    while x != end_coords.y {
-                        println!(
-                            "Piece: {}, at ({}, {})",
-                            self[start_coords.y][x], x, start_coords.y
-                        );
+                    for x in range.step_by(1) {
                         if !self[start_coords.y][x].is_empty() {
                             return false;
                         }
-                        x = if start_coords.x < end_coords.x {
-                            x + 1
-                        } else {
-                            x - 1
-                        };
                     }
                     return true;
                 }
                 false
             }
             PiecePath::Diagonal => {
-                println!("{:?} -> {:?}", start_coords, end_coords);
-                if start_coords.x == end_coords.x {
-                    println!("moving in xy");
-                    println!("{}", self);
-                    let mut y = if start_coords.y < end_coords.y {
-                        start_coords.y + 1
-                    } else {
-                        start_coords.y - 1
-                    };
-                    let mut x = if start_coords.y < end_coords.y {
-                        start_coords.y + 1
-                    } else {
-                        start_coords.y - 1
-                    };
-                    println!("y: {}", y);
-                    while y != end_coords.y {
-                        println!("Piece: {}, at ({}, {})", self[y][x], x, y);
-                        if !self[y][x].is_empty() {
+                if start_coords.x != end_coords.x && start_coords.y != end_coords.y {
+                    let (mut x, mut y) =
+                        match (start_coords.x < end_coords.x, start_coords.y < end_coords.y) {
+                            (true, true) => (start_coords.x + 1, start_coords.y + 1),
+                            (true, false) => (
+                                start_coords.x + 1,
+                                start_coords.y.checked_sub(1).unwrap_or(9),
+                            ),
+                            (false, true) => (
+                                start_coords.x.checked_sub(1).unwrap_or(9),
+                                start_coords.y + 1,
+                            ),
+                            (false, false) => (
+                                start_coords.x.checked_sub(1).unwrap_or(9),
+                                start_coords.y.checked_sub(1).unwrap_or(9),
+                            ),
+                        };
+                    while x != end_coords.x && y != end_coords.y {
+                        if !self[y][x].is_empty() || x == 9 || y == 9 {
                             return false;
                         }
-                        y = if start_coords.y < end_coords.y {
-                            y + 1
-                        } else {
-                            y - 1
+                        x = match (start_coords.x < end_coords.x, x < end_coords.x) {
+                            (true, true) => x + 1,
+                            (true, false) => x.checked_sub(1).unwrap_or(9),
+                            (false, true) => x + 1,
+                            (false, false) => x.checked_sub(1).unwrap_or(9),
                         };
-                        x = if start_coords.y < end_coords.y {
-                            y + 1
-                        } else {
-                            y - 1
+                        y = match (start_coords.y < end_coords.y, y < end_coords.y) {
+                            (true, true) => y + 1,
+                            (true, false) => y.checked_sub(1).unwrap_or(9),
+                            (false, true) => y.checked_sub(1).unwrap_or(9),
+                            (false, false) => y.checked_sub(1).unwrap_or(9),
                         };
                     }
                     return true;

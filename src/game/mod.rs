@@ -7,6 +7,8 @@ mod index_extensions;
 pub struct Game {
     pub board: [[Piece; 8]; 8],
     pub turn: u8,
+    pub check: (bool, bool),
+    pub king_positions: [(usize, usize); 2],
 }
 
 impl Display for Game {
@@ -24,20 +26,26 @@ impl Display for Game {
 
 impl Game {
     pub fn make_move(&mut self, coords: Coords) -> Result<(), String> {
-        let previous_position = match PieceMove::from_piece_type(coords.piece, coords, self) {
+        let previous_position = match PieceMove::from_piece_type(coords, self) {
             Ok(x) => x,
-            Err(e) => return Err(e),
+            Err(e) => {
+                return Err(e);
+            }
         };
 
-        if !previous_position.is_valid(self) {
+        if !previous_position.is_valid(self, None) {
             return Err("Invalid move".to_string());
         }
 
         let color_mask = if self.turn == 1 { 0b1000 } else { 0 };
-        let piece = Piece::from_coords(coords.piece as u8 ^ color_mask, coords);
+        let piece = Piece::from_coords((coords.piece as u8) ^ color_mask, coords);
 
         self[previous_position.piece.coords.y][previous_position.piece.coords.x] = Piece::empty();
         self[coords.y][coords.x] = piece;
+
+        if piece.piece_type() == (PieceType::King as u8) {
+            self.king_positions[self.turn as usize] = (coords.x, coords.y);
+        }
 
         Ok(())
     }
@@ -47,9 +55,9 @@ impl Game {
             PiecePath::Straight => {
                 if start_coords.x == end_coords.x {
                     let range = if start_coords.y < end_coords.y {
-                        (start_coords.y + 1)..end_coords.y
+                        start_coords.y + 1..end_coords.y
                     } else {
-                        (end_coords.y + 1)..start_coords.y
+                        end_coords.y + 1..start_coords.y
                     };
                     for y in range.step_by(1) {
                         if !self[y][start_coords.x].is_empty() {
@@ -59,9 +67,9 @@ impl Game {
                     return true;
                 } else if start_coords.y == end_coords.y {
                     let range = if start_coords.x < end_coords.x {
-                        (start_coords.x + 1)..end_coords.x
+                        start_coords.x + 1..end_coords.x
                     } else {
-                        (end_coords.x + 1)..start_coords.x
+                        end_coords.x + 1..start_coords.x
                     };
                     for x in range.step_by(1) {
                         if !self[start_coords.y][x].is_empty() {
@@ -74,22 +82,20 @@ impl Game {
             }
             PiecePath::Diagonal => {
                 if start_coords.x != end_coords.x && start_coords.y != end_coords.y {
-                    let (mut x, mut y) =
-                        match (start_coords.x < end_coords.x, start_coords.y < end_coords.y) {
-                            (true, true) => (start_coords.x + 1, start_coords.y + 1),
-                            (true, false) => (
-                                start_coords.x + 1,
-                                start_coords.y.checked_sub(1).unwrap_or(9),
-                            ),
-                            (false, true) => (
-                                start_coords.x.checked_sub(1).unwrap_or(9),
-                                start_coords.y + 1,
-                            ),
-                            (false, false) => (
+                    let (mut x, mut y) = match
+                        (start_coords.x < end_coords.x, start_coords.y < end_coords.y)
+                    {
+                        (true, true) => (start_coords.x + 1, start_coords.y + 1),
+                        (true, false) =>
+                            (start_coords.x + 1, start_coords.y.checked_sub(1).unwrap_or(9)),
+                        (false, true) =>
+                            (start_coords.x.checked_sub(1).unwrap_or(9), start_coords.y + 1),
+                        (false, false) =>
+                            (
                                 start_coords.x.checked_sub(1).unwrap_or(9),
                                 start_coords.y.checked_sub(1).unwrap_or(9),
                             ),
-                        };
+                    };
                     while x != end_coords.x && y != end_coords.y {
                         if !self[y][x].is_empty() || x == 9 || y == 9 {
                             return false;
@@ -111,6 +117,29 @@ impl Game {
                 }
                 false
             }
+        }
+    }
+
+    pub fn is_king_in_check(&mut self) -> bool {
+        PieceType::iter().any(|piece_type| {
+            let move_coords = self.get_move_coords(piece_type);
+            self.is_attacked(move_coords)
+        })
+    }
+
+    fn get_move_coords(&self, piece_type: PieceType) -> Coords {
+        Coords {
+            piece: piece_type,
+            x: self.king_positions[self.turn as usize].0,
+            y: self.king_positions[self.turn as usize].1,
+            is_capture: true,
+        }
+    }
+
+    fn is_attacked(&self, piece_coords: Coords) -> bool {
+        match PieceMove::from_piece_type(piece_coords, self) {
+            Ok(x) => true,
+            Err(_) => false,
         }
     }
 }

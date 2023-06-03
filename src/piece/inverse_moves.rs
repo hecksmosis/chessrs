@@ -1,3 +1,5 @@
+use std::vec;
+
 use crate::*;
 
 pub fn get_pawn_moves(coords: &Coords, move_dir: isize) -> [(usize, usize); 2] {
@@ -56,4 +58,17 @@ pub fn get_bishop_moves(coords: &Coords) -> Vec<(usize, usize)> {
                 .map(|(x, y)| (x as usize, y as usize))
         })
         .collect::<Vec<(usize, usize)>>()
+}
+
+pub fn get_king_moves() -> Vec<(i32, i32)> {
+    vec![
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
+        (1, 0),
+        (-1, 0),
+        (0, 1),
+        (0, -1),
+    ]
 }

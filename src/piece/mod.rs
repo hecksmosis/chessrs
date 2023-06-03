@@ -28,7 +28,7 @@ impl Piece {
     }
 
     pub fn color(&self) -> u8 {
-        (self.byte & 0b1000 != 0) as u8
+        ((self.byte & 0b1000) != 0) as u8
     }
 
     pub fn piece_type(&self) -> u8 {
@@ -70,7 +70,7 @@ impl Display for Piece {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PieceType {
     Pawn = 0b1,
     Rook = 0b10,
@@ -79,4 +79,20 @@ pub enum PieceType {
     Queen = 0b101,
     King = 0b110,
     None = 0,
+}
+
+impl PieceType {
+    pub fn iter() -> impl Iterator<Item = PieceType> {
+        // Define the order in which the pieces should be iterated
+        static PIECE_TYPES: [PieceType; 6] = [
+            PieceType::Pawn,
+            PieceType::Knight,
+            PieceType::Bishop,
+            PieceType::Rook,
+            PieceType::Queen,
+            PieceType::King,
+        ];
+
+        PIECE_TYPES.iter().cloned()
+    }
 }

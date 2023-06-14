@@ -31,6 +31,7 @@ fn main() {
         match game.make_move(coords) {
             Ok(_) => {
                 println!("{}", game);
+                println!("In check?: {}", game.is_king_in_check());
                 let last_bit_mask = 1;
                 game.turn ^= last_bit_mask;
             }

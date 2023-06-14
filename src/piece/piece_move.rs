@@ -22,18 +22,18 @@ impl PieceMove {
         }
     }
 
-    pub fn from_piece_type(coords: Coords, game: &Game) -> Result<Self, String> {
+    pub fn from_piece_type(coords: Coords, game: &Game, skip_check: bool) -> Result<Self, String> {
         match coords.piece {
             PieceType::Pawn => match get_pawn_moves(&coords, if game.turn == 0 { -1 } else { 1 })
                 .iter()
                 .find(|(x, y)| {
-                    println!("{}, {}", x, y);
                     if y > &7 || x > &7 {
                         return false;
                     }
                     let piece = game[*y][*x];
-                    println!("make_move > previous_positions: {:?} ", piece);
-                    piece.piece_type() == (coords.piece as u8) && piece.color() == game.turn
+                    piece.piece_type() == (coords.piece as u8)
+                        && ((piece.color() == game.turn && !skip_check)
+                            || (skip_check && piece.color() != game.turn))
                 }) {
                 Some(x) => Ok(PieceMove::new(game[x.1][x.0], coords.is_capture, coords)),
                 None => {
@@ -47,7 +47,8 @@ impl PieceMove {
                     .filter_map(|(x, y)| {
                         let piece = game[y][x];
                         if piece.piece_type() == (coords.piece as u8)
-                            && piece.color() == game.turn
+                            && ((piece.color() == game.turn && !skip_check)
+                                || (skip_check && piece.color() != game.turn))
                             && PieceMove::new(piece, coords.is_capture, coords).is_valid(game, None)
                         {
                             Some(PieceMove::new(piece, coords.is_capture, coords))
@@ -80,7 +81,8 @@ impl PieceMove {
                         x < 8
                             && y < 8
                             && piece.piece_type() == (coords.piece as u8)
-                            && piece.color() == game.turn
+                            && ((piece.color() == game.turn && !skip_check)
+                                || (skip_check && piece.color() != game.turn))
                             && ((!coords.is_capture && game[coords].is_empty())
                                 || (coords.is_capture && game[coords].color() != game.turn))
                     })
@@ -97,13 +99,13 @@ impl PieceMove {
                 let moves = get_bishop_moves(&coords)
                     .into_iter()
                     .filter(|&(x, y)| {
-                        println!("x: {}, y: {}", x, y);
                         if y > 7 || x > 7 {
                             return false;
                         }
                         let piece = game[y][x];
                         piece.piece_type() == (coords.piece as u8)
-                            && piece.color() == game.turn
+                            && ((piece.color() == game.turn && !skip_check)
+                                || (skip_check && piece.color() != game.turn))
                             && PieceMove::new(game[y][x], coords.is_capture, coords)
                                 .is_valid(game, None)
                     })
@@ -120,20 +122,43 @@ impl PieceMove {
                 let moves_as_bishop = get_bishop_moves(&coords)
                     .into_iter()
                     .filter(|&(x, y)| {
-                        println!("x: {}, y: {}", x, y);
                         if y > 7 || x > 7 {
+                            println!("Out of bounds");
                             return false;
                         }
                         let piece = game[y][x];
+                        println!("x: {} y: {} Piece: {:?}", x, y, piece);
+                        println!("{}", piece.piece_type() == (coords.piece as u8));
+                        println!(
+                            "{} color: {}, turn: {}",
+                            (piece.color() == game.turn && !skip_check)
+                                || (skip_check && piece.color() != game.turn),
+                            piece.color(),
+                            game.turn
+                        );
+                        println!(
+                            "{}",
+                            PieceMove::new(game[y][x], coords.is_capture, coords)
+                                .is_valid(game, None)
+                        );
                         piece.piece_type() == (coords.piece as u8)
-                            && piece.color() == game.turn
+                            && ((piece.color() == game.turn && !skip_check)
+                                || (skip_check && piece.color() != game.turn))
                             && PieceMove::new(game[y][x], coords.is_capture, coords)
                                 .is_valid(game, None)
                     })
                     .map(|(x, y)| PieceMove::new(game[y][x], coords.is_capture, coords))
                     .collect::<Vec<PieceMove>>();
+                println!("Moves as bishop: {:?}", moves_as_bishop);
                 if moves_as_bishop.len() == 1 {
-                    if moves_as_bishop[0].is_valid(game, Some(PieceType::Bishop)) {
+                    if moves_as_bishop[0].is_valid(
+                        game,
+                        if !skip_check {
+                            Some(PieceType::Bishop)
+                        } else {
+                            None
+                        },
+                    ) {
                         return Ok(moves_as_bishop[0].clone());
                     }
                 }
@@ -143,8 +168,23 @@ impl PieceMove {
                     .map(|(x, y)| (*x, *y))
                     .filter_map(|(x, y)| {
                         let piece = game[y][x];
+                        println!("x: {} y: {} Piece: {:?}", x, y, piece);
+                        println!("{}", piece.piece_type() == (coords.piece as u8));
+                        println!(
+                            "{} color: {}, turn: {}",
+                            (piece.color() == game.turn && !skip_check)
+                                || (skip_check && piece.color() != game.turn),
+                            piece.color(),
+                            game.turn
+                        );
+                        println!(
+                            "{}",
+                            PieceMove::new(game[y][x], coords.is_capture, coords)
+                                .is_valid(game, None)
+                        );
                         if piece.piece_type() == (coords.piece as u8)
-                            && piece.color() == game.turn
+                            && ((piece.color() == game.turn && !skip_check)
+                                || (skip_check && piece.color() != game.turn))
                             && PieceMove::new(piece, coords.is_capture, coords).is_valid(game, None)
                         {
                             Some(PieceMove::new(piece, coords.is_capture, coords))
@@ -153,9 +193,17 @@ impl PieceMove {
                         }
                     })
                     .collect::<Vec<PieceMove>>();
+                println!("Moves as rook: {:?}", moves_as_rook);
 
                 if moves_as_rook.len() == 1 {
-                    if moves_as_rook[0].is_valid(game, Some(PieceType::Rook)) {
+                    if moves_as_rook[0].is_valid(
+                        game,
+                        if !skip_check {
+                            Some(PieceType::Rook)
+                        } else {
+                            None
+                        },
+                    ) {
                         return Ok(moves_as_rook[0].clone());
                     }
                 }
@@ -177,7 +225,8 @@ impl PieceMove {
                         }
                         let piece = game[y][x];
                         piece.piece_type() == (coords.piece as u8)
-                            && piece.color() == game.turn
+                            && ((piece.color() == game.turn && !skip_check)
+                                || (skip_check && piece.color() != game.turn))
                             && PieceMove::new(game[y][x], coords.is_capture, coords)
                                 .is_valid(game, None)
                     })

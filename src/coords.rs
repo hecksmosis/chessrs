@@ -90,8 +90,6 @@ impl Coords {
             _ => return Err("Invalid y coordinate".to_string()),
         };
 
-        println!("x: {}, y: {}", x, y);
-
         Ok(Coords {
             piece,
             is_capture,

@@ -26,7 +26,7 @@ impl Display for Game {
 
 impl Game {
     pub fn make_move(&mut self, coords: Coords) -> Result<(), String> {
-        let previous_position = match PieceMove::from_piece_type(coords, self, false) {
+        let previous_position = match PieceMove::from_piece_type(coords, self, false, self.turn) {
             Ok(x) => x,
             Err(e) => {
                 return Err(e);
@@ -99,7 +99,10 @@ impl Game {
                             ),
                         };
                     while x != end_coords.x && y != end_coords.y {
-                        if !self[y][x].is_empty() || x == 9 || y == 9 {
+                        if x >= 8 || y >= 8 {
+                            return false;
+                        }
+                        if !self[y][x].is_empty() {
                             return false;
                         }
                         x = match (start_coords.x < end_coords.x, x < end_coords.x) {
@@ -122,26 +125,39 @@ impl Game {
         }
     }
 
-    pub fn is_king_in_check(&mut self) -> bool {
-        PieceType::iter().any(|piece_type| {
-            println!("piece_type: {:?}", piece_type);
-            let attacking_coords = self.get_move_coords(piece_type);
-            self.is_attacked(attacking_coords)
-        })
+    pub fn is_king_in_check(&mut self) -> Vec<bool> {
+        [0, 1]
+            .iter()
+            .map(|color| {
+                PieceType::iter().any(|piece_type| {
+                    self.get_check_move_coords(piece_type)
+                        .iter()
+                        .any(|coords| self.is_attacked(*coords, *color))
+                })
+            })
+            .collect::<Vec<bool>>()
     }
 
-    fn get_move_coords(&self, piece_type: PieceType) -> Coords {
-        Coords {
-            piece: piece_type,
-            x: self.king_positions[self.turn as usize].0,
-            y: self.king_positions[self.turn as usize].1,
-            is_capture: true,
-        }
+    fn get_check_move_coords(&self, piece_type: PieceType) -> Vec<Coords> {
+        vec![
+            Coords {
+                piece: piece_type,
+                x: self.king_positions[0].0,
+                y: self.king_positions[0].1,
+                is_capture: true,
+            },
+            Coords {
+                piece: piece_type,
+                x: self.king_positions[1].0,
+                y: self.king_positions[1].1,
+                is_capture: true,
+            },
+        ]
     }
 
-    fn is_attacked(&self, piece_coords: Coords) -> bool {
+    fn is_attacked(&self, piece_coords: Coords, color: u8) -> bool {
         println!("piece_coords: {:?}", piece_coords);
-        let attacker_move = match PieceMove::from_piece_type(piece_coords, self, true) {
+        let attacker_move = match PieceMove::from_piece_type(piece_coords, self, true, color) {
             Ok(x) => x,
             Err(e) => {
                 println!("{}", e);

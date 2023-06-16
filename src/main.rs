@@ -30,10 +30,17 @@ fn main() {
 
         match game.make_move(coords) {
             Ok(_) => {
+                println!("turn: {}, ", game.turn);
                 println!("{}", game);
-                println!("In check?: {}", game.is_king_in_check());
-                let last_bit_mask = 1;
+                println!(
+                    "White in check?: {}, black in check?: {}",
+                    game.is_king_in_check()[0],
+                    game.is_king_in_check()[1]
+                );
+                println!("{}", game);
+                let last_bit_mask = 0b0000_0001;
                 game.turn ^= last_bit_mask;
+                println!("turn at end: {}", game.turn);
             }
             Err(e) => {
                 println!("{}, try again", e);

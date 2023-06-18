@@ -1,4 +1,11 @@
 [package]
 name = "chess"
 version = "0.1.0"
+authors = ["hecksmosis <hecksmosis@gmail.com>"]
+license = "MIT"
+description = "A command line implementation for the game of chess"
+readme = "README.md"
+homepage = "https://github.com/hecksmosis/chess"
+repository = "https://github.com/hecksmosis/chess"
+keywords = ["chess", "game"]
 edition = "2021"

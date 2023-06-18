@@ -41,7 +41,7 @@ impl Default for Game {
                 create_start_row(false),
             ],
             turn: 0,
-            check: (false, false),
+            check: Checks::default(),
             king_positions: [(4, 0), (4, 7)],
         }
     }

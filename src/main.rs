@@ -1,4 +1,4 @@
-use chess::main_loop;
+use chessrs::main_loop;
 
 fn main() {
     // TODO: Add command line arguments

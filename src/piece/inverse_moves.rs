@@ -2,62 +2,88 @@ use std::vec;
 
 use crate::*;
 
-pub fn get_pawn_moves(coords: &Coords, move_dir: isize) -> [(usize, usize); 2] {
-    if !coords.is_capture {
+pub fn inv_for_pawn(input: &Input, move_dir: isize, game: &mut Game) -> [(usize, usize, bool); 2] {
+    if game.moves.last().is_some() {
+        println!(
+            "last move: {} pawn move: {} one to the sides: {} double move: {}",
+            game.moves.last().is_some(),
+            game.moves.last().unwrap().piece.piece_type() == PieceType::Pawn as u8,
+            game.moves.last().unwrap().piece.position.x == input.end_position.x,
+            game.moves.last().unwrap().piece.position.y as isize
+                + if game.turn == 1 { 2 } else { -2 }
+                == game.moves.last().unwrap().end_position.y as isize
+        );
+    }
+    if !input.is_capture {
         [
-            (coords.x, (coords.y as isize + move_dir) as usize),
-            (coords.x, (coords.y as isize + (move_dir * 2)) as usize),
+            (
+                input.end_position.x,
+                (input.end_position.y as isize + move_dir) as usize,
+                false,
+            ),
+            (
+                input.end_position.x,
+                (input.end_position.y as isize + (move_dir * 2)) as usize,
+                false,
+            ),
+        ]
+    } else if game.moves.last().is_some()
+        && game.moves.last().unwrap().piece.piece_type() == PieceType::Pawn as u8
+        && game.moves.last().unwrap().piece.position.x == input.end_position.x
+        && game.moves.last().unwrap().piece.position.y as isize
+            + if game.turn == 1 { 2 } else { -2 }
+            == game.moves.last().unwrap().end_position.y as isize
+    {
+        [
+            (
+                (input.end_position.x as isize - 1) as usize,
+                (input.end_position.y as isize + move_dir) as usize,
+                true,
+            ),
+            (
+                (input.end_position.x as isize + 1) as usize,
+                (input.end_position.y as isize + move_dir) as usize,
+                true,
+            ),
         ]
     } else {
         [
             (
-                (coords.x as isize - 1) as usize,
-                (coords.y as isize + move_dir) as usize,
+                (input.end_position.x as isize - 1) as usize,
+                (input.end_position.y as isize + move_dir) as usize,
+                false,
             ),
             (
-                (coords.x as isize + 1) as usize,
-                (coords.y as isize + move_dir) as usize,
+                (input.end_position.x as isize + 1) as usize,
+                (input.end_position.y as isize + move_dir) as usize,
+                false,
             ),
         ]
     }
 }
 
-pub fn get_rook_moves(coords: &Coords) -> Vec<(usize, usize)> {
+pub fn inv_for_rook(input: &Input) -> Vec<Position> {
     let mut possible_previous_positions = Vec::new();
     for i in 0..=7 {
-        if 7 - i != coords.y {
-            possible_previous_positions.push((coords.x, 7 - i));
+        if 7 - i != input.end_position.y {
+            possible_previous_positions.push(input.end_position.with_y(7 - i));
         }
-        if i != coords.x {
-            possible_previous_positions.push((i, coords.y));
+        if i != input.end_position.x {
+            possible_previous_positions.push(input.end_position.with_x(i));
         }
     }
     possible_previous_positions
 }
 
-pub fn get_knight_moves() -> Vec<(i32, i32)> {
-    vec![
-        (1, 2),
-        (1, -2),
-        (-1, 2),
-        (-1, -2),
-        (2, 1),
-        (2, -1),
-        (-2, 1),
-        (-2, -1),
-    ]
-}
-
-pub fn get_bishop_moves(coords: &Coords) -> Vec<(usize, usize)> {
+pub fn inv_for_bishop(input: &Input) -> Vec<Position> {
     [(1, 1), (1, -1), (-1, 1), (-1, -1)]
         .iter()
         .flat_map(|&(dx, dy)| {
             (1..=8)
-                .map(move |i| (coords.x as i32 + dx * i, coords.y as i32 + dy * i))
-                .filter(|&(x, y)| x >= 0 && x < 8 && y >= 0 && y <= 8)
-                .map(|(x, y)| (x as usize, y as usize))
+                .map(move |i| input.end_position + (dx * i, dy * i))
+                .filter(|&pos| Game::in_bounds(pos))
         })
-        .collect::<Vec<(usize, usize)>>()
+        .collect::<Vec<_>>()
 }
 
 pub fn get_king_moves() -> Vec<(i32, i32)> {

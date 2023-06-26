@@ -1,26 +1,28 @@
 use crate::*;
 pub use inverse_moves::*;
+pub use moves::*;
 pub use piece_move::*;
 
 mod inverse_moves;
+mod moves;
 mod piece_move;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Piece {
     pub byte: u8,
-    pub coords: Coords,
+    pub position: Position,
 }
 
 impl Piece {
-    pub fn new(byte: u8, coords: (usize, usize)) -> Self {
+    pub fn new(byte: u8, position: (usize, usize)) -> Self {
         Piece {
             byte,
-            coords: coords.into(),
+            position: position.into(),
         }
     }
 
-    pub fn from_coords(byte: u8, coords: Coords) -> Self {
-        Piece { byte, coords }
+    pub fn from_position(byte: u8, position: Position) -> Self {
+        Piece { byte, position }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -36,14 +38,12 @@ impl Piece {
     }
 
     pub fn is_home_row(&self) -> bool {
-        (self.coords.y == 1 && self.byte == 0b0001) || (self.coords.y == 6 && self.byte == 0b1001)
+        (self.position.y == 1 && self.byte == 0b0001)
+            || (self.position.y == 6 && self.byte == 0b1001)
     }
 
-    pub fn empty() -> Self {
-        Piece {
-            byte: 0,
-            coords: Coords::default(),
-        }
+    pub fn empty(position: Position) -> Self {
+        Piece { byte: 0, position }
     }
 }
 
@@ -67,6 +67,26 @@ impl Display for Piece {
         };
 
         write!(f, "{}", piece)
+    }
+}
+
+impl Value for Piece {
+    fn value(&self) -> i32 {
+        match self.byte {
+            0b0001 => 1,
+            0b0010 => 5,
+            0b0011 => 3,
+            0b0100 => 3,
+            0b0101 => 9,
+            0b0110 => 1000,
+            0b1001 => -1,
+            0b1010 => -5,
+            0b1011 => -3,
+            0b1100 => -3,
+            0b1101 => -9,
+            0b1110 => -1000,
+            _ => 0,
+        }
     }
 }
 
@@ -94,5 +114,19 @@ impl PieceType {
         ];
 
         PIECE_TYPES.iter().cloned()
+    }
+}
+
+impl From<u8> for PieceType {
+    fn from(byte: u8) -> Self {
+        match byte & 0b0111 {
+            0b0001 => PieceType::Pawn,
+            0b0010 => PieceType::Rook,
+            0b0011 => PieceType::Knight,
+            0b0100 => PieceType::Bishop,
+            0b0101 => PieceType::Queen,
+            0b0110 => PieceType::King,
+            _ => PieceType::None,
+        }
     }
 }

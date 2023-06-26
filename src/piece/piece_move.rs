@@ -1,52 +1,160 @@
 use crate::*;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PieceMove {
     pub piece: Piece,
+    pub end_position: Position,
     pub is_capture: bool,
-    pub end_coords: Coords,
+    pub en_passant: bool,
+    pub castling: Option<(Position, Position)>,
 }
 
 impl Display for PieceMove {
     fn fmt(&self, f: &mut Formatter) -> fmtResult {
-        write!(f, "{} -> {}", self.piece, self.end_coords)
+        write!(f, "{} -> {}", self.piece, self.end_position)
     }
 }
 
 impl PieceMove {
-    pub fn new(piece: Piece, is_capture: bool, end_coords: Coords) -> Self {
+    pub fn new(
+        piece: Piece,
+        end_position: Position,
+        is_capture: bool,
+        en_passant: bool,
+        castling: Option<(Position, Position)>,
+    ) -> Self {
         PieceMove {
             piece,
+            end_position,
             is_capture,
-            end_coords,
+            en_passant,
+            castling,
         }
     }
 
-    pub fn from_piece_type(
-        coords: Coords,
+    pub fn build(
+        piece: Piece,
+        end_position: Position,
+        is_capture: bool,
+        en_passant: bool,
+        castling: Option<(Position, Position)>,
         game: &Game,
+    ) -> Option<Self> {
+        let p_move = PieceMove {
+            piece,
+            end_position,
+            is_capture,
+            en_passant,
+            castling,
+        };
+        if !Game::in_bounds(end_position) {
+            return None;
+        }
+        if p_move.is_valid(game, piece.piece_type().into()) {
+            Some(p_move)
+        } else {
+            None
+        }
+    }
+
+    pub fn from_piece(piece: Piece, game: &Game) -> Vec<Self> {
+        let mut moves = Vec::new();
+        moves.extend(match piece.piece_type().into() {
+            PieceType::Pawn => for_pawn(game.turn)
+                .iter()
+                .map(|&(x, y, capture)| {
+                    (
+                        piece.position + (x, y),
+                        capture,
+                        game.moves.last().is_some()
+                            && game.moves.last().unwrap().piece.piece_type()
+                                == PieceType::Pawn as u8
+                            && game.moves.last().unwrap().piece.position.x as isize
+                                + if game.turn == 1 { 1 } else { -1 }
+                                == piece.position.x as isize
+                            && game.moves.last().unwrap().piece.position.y as isize
+                                + if game.turn == 1 { 2 } else { -2 }
+                                == game.moves.last().unwrap().end_position.y as isize
+                            && game.moves.last().unwrap().end_position.y as isize
+                                == piece.position.y as isize
+                            && capture,
+                    )
+                })
+                .filter_map(|(pos, capture, en_passant)| {
+                    PieceMove::build(piece, pos, capture, en_passant, None, game)
+                })
+                .collect(),
+            PieceType::Knight => for_knight()
+                .into_iter()
+                .map(|diff| piece.position + diff)
+                .filter_map(|pos| {
+                    PieceMove::build(piece, pos, !game[pos].is_empty(), false, None, game)
+                })
+                .collect(),
+            PieceType::Bishop => for_bishop(piece.position)
+                .into_iter()
+                .filter_map(|pos| {
+                    PieceMove::build(piece, pos, !game[pos].is_empty(), false, None, game)
+                })
+                .collect(),
+            PieceType::Rook => for_rook(piece.position)
+                .into_iter()
+                .filter_map(|pos| {
+                    PieceMove::build(piece, pos, !game[pos].is_empty(), false, None, game)
+                })
+                .collect(),
+            PieceType::Queen => for_queen(piece.position)
+                .into_iter()
+                .filter_map(|pos| {
+                    PieceMove::build(piece, pos, !game[pos].is_empty(), false, None, game)
+                })
+                .collect(),
+            PieceType::King => for_king(piece.position)
+                .into_iter()
+                .filter_map(|pos| {
+                    PieceMove::build(piece, pos, !game[pos].is_empty(), false, None, game)
+                })
+                .collect(),
+            _ => Vec::new(),
+        });
+        moves
+    }
+
+    pub fn from_piece_type(
+        input: Input,
+        game: &mut Game,
         skip_check: bool,
         turn_to_use: u8,
     ) -> Result<Self, String> {
-        match coords.piece {
-            PieceType::Pawn => match get_pawn_moves(&coords, if turn_to_use == 0 { -1 } else { 1 })
-                .iter()
-                .find(|(x, y)| {
-                    if y > &7 || x > &7 {
-                        return false;
+        match input.piece_type {
+            PieceType::Pawn => {
+                match inv_for_pawn(&input, if turn_to_use == 0 { -1 } else { 1 }, game)
+                    .iter()
+                    .find(|(x, y, can_en_croissant)| {
+                        if y > &7 || x > &7 {
+                            return false;
+                        }
+                        println!("{:?}", (x, y, can_en_croissant));
+
+                        let piece = game[(*x, *y)];
+                        (piece.piece_type() == (input.piece_type as u8))
+                            && ((piece.color() == turn_to_use && !skip_check)
+                                || (skip_check && piece.color() != turn_to_use))
+                    }) {
+                    Some(x) => Ok(PieceMove::new(
+                        game[(x.0, x.1)],
+                        input.end_position,
+                        input.is_capture,
+                        x.2,
+                        None,
+                    )),
+                    None => {
+                        return Err("Pawn: Invalid move (0 possible positions)".to_string());
                     }
-                    let piece = game[*y][*x];
-                    piece.piece_type() == (coords.piece as u8)
-                        && ((piece.color() == turn_to_use && !skip_check)
-                            || (skip_check && piece.color() != turn_to_use))
-                }) {
-                Some(x) => Ok(PieceMove::new(game[x.1][x.0], coords.is_capture, coords)),
-                None => {
-                    return Err("Pawn: Invalid move (0 possible positions)".to_string());
                 }
-            },
+            }
             PieceType::Rook => {
-                let moves = generate_rook_moves(coords, game, skip_check, turn_to_use);
+                let moves = generate_rook_moves(input, game, skip_check, turn_to_use);
                 match moves.len() {
                     0 => Err("Rook: Invalid move (0 possible positions)".to_string()),
                     1 => Ok(moves[0].clone()),
@@ -54,28 +162,21 @@ impl PieceMove {
                 }
             }
             PieceType::Knight => {
-                let moves = get_knight_moves()
+                let moves = for_knight()
                     .into_iter()
-                    .map(|(dx, dy)| {
-                        (
-                            ((coords.x as i32) + dx) as usize,
-                            ((coords.y as i32) + dy) as usize,
-                        )
-                    })
-                    .filter(|&(x, y)| {
-                        if x > 7 || y > 7 {
+                    .map(|diff| input.end_position + diff)
+                    .filter(|&pos| {
+                        if !Game::in_bounds(pos) {
                             return false;
                         }
-                        let piece = game[y][x];
-                        x < 8
-                            && y < 8
-                            && piece.piece_type() == (coords.piece as u8)
+                        let piece = game[pos];
+                        piece.piece_type() == (input.piece_type as u8)
                             && ((piece.color() == turn_to_use && !skip_check)
                                 || (skip_check && piece.color() != turn_to_use))
-                            && ((!coords.is_capture && game[coords].is_empty())
-                                || (coords.is_capture && game[coords].color() != turn_to_use))
                     })
-                    .map(|(x, y)| PieceMove::new(game[y][x], coords.is_capture, coords))
+                    .map(|pos| {
+                        PieceMove::new(game[pos], input.end_position, input.is_capture, false, None)
+                    })
                     .collect::<Vec<PieceMove>>();
 
                 match moves.len() {
@@ -85,7 +186,7 @@ impl PieceMove {
                 }
             }
             PieceType::Bishop => {
-                let moves = generate_bishop_moves(coords, game, skip_check, turn_to_use);
+                let moves = generate_bishop_moves(input, game, skip_check, turn_to_use);
                 match moves.len() {
                     0 => Err("Bishop: Invalid move (0 possible positions)".to_string()),
                     1 => Ok(moves[0].clone()),
@@ -93,21 +194,16 @@ impl PieceMove {
                 }
             }
             PieceType::Queen => {
-                let moves_as_bishop = generate_bishop_moves(coords, game, skip_check, turn_to_use);
+                let moves_as_bishop = generate_bishop_moves(input, game, skip_check, turn_to_use);
                 if moves_as_bishop.len() == 1 {
-                    if moves_as_bishop[0].is_valid(game, Some(PieceType::Bishop)) {
-                        println!(
-                            "Queen moves as bishop (checking with Bishop): {:?}",
-                            moves_as_bishop[0]
-                        );
+                    if moves_as_bishop[0].is_valid(game, PieceType::Bishop) {
                         return Ok(moves_as_bishop[0].clone());
                     }
                 }
 
-                let moves_as_rook = generate_rook_moves(coords, game, skip_check, turn_to_use);
-                println!("Queen moves as rook: {:?}", moves_as_rook);
+                let moves_as_rook = generate_rook_moves(input, game, skip_check, turn_to_use);
                 if moves_as_rook.len() == 1 {
-                    if moves_as_rook[0].is_valid(game, Some(PieceType::Rook)) {
+                    if moves_as_rook[0].is_valid(game, PieceType::Rook) {
                         return Ok(moves_as_rook[0].clone());
                     }
                 }
@@ -115,26 +211,93 @@ impl PieceMove {
                 Err("Queen: Invalid move (0 possible positions)".to_string())
             }
             PieceType::King => {
+                // Handle castling
+                if input.castling != 0 {
+                    if game
+                        .moves
+                        .get_with_type_and_color(PieceType::King, game.turn)
+                        .len()
+                        > 0
+                    {
+                        return Err("Invalid move: cannot castle".to_string());
+                    }
+
+                    let king_pos = if game.turn == 0 {
+                        (4usize, 0).into()
+                    } else {
+                        (4usize, 7).into()
+                    };
+
+                    let rook_pos = match (game.turn, input.castling) {
+                        (0, 1) => (7usize, 0).into(),
+                        (0, 2) => (0usize, 0).into(),
+                        (1, 1) => (7usize, 7).into(),
+                        (1, 2) => (0usize, 7).into(),
+                        (_, _) => unreachable!(),
+                    };
+
+                    let (end_king_pos, end_rook_pos): (Position, Position) =
+                        match (game.turn, input.castling) {
+                            (0, 1) => ((6, 0).into(), (5, 0).into()),
+                            (0, 2) => ((2, 0).into(), (3, 0).into()),
+                            (1, 1) => ((6, 7).into(), (5, 7).into()),
+                            (1, 2) => ((2, 7).into(), (3, 7).into()),
+                            (_, _) => unreachable!(),
+                        };
+                    if input.castling == 1 {
+                        if game.moves.piece_moved(if game.turn == 0 {
+                            (0usize, 0).into()
+                        } else {
+                            (0usize, 7).into()
+                        }) {
+                            return Err("Invalid move: rook has already moved".to_string());
+                        }
+                    } else {
+                        if game.moves.piece_moved(if game.turn == 0 {
+                            (7usize, 0).into()
+                        } else {
+                            (7usize, 7).into()
+                        }) {
+                            return Err("Invalid move: rook has already moved".to_string());
+                        }
+                    }
+
+                    if !game.is_path(PiecePath::Straight, king_pos, rook_pos) {
+                        return Err("Invalid move: path is blocked".to_string());
+                    }
+
+                    return Ok(PieceMove::new(
+                        game[king_pos],
+                        end_king_pos,
+                        false,
+                        false,
+                        Some((end_king_pos, end_rook_pos)),
+                    ));
+                }
+
                 let moves = get_king_moves()
                     .iter()
-                    .map(|(dx, dy)| {
-                        (
-                            ((coords.x as i32) + dx) as usize,
-                            ((coords.y as i32) + dy) as usize,
-                        )
-                    })
-                    .filter(|&(x, y)| {
-                        if y > 7 || x > 7 {
+                    .map(|&diff| input.end_position + diff)
+                    .filter(|&pos| {
+                        if !Game::in_bounds(pos) {
                             return false;
                         }
-                        let piece = game[y][x];
-                        piece.piece_type() == (coords.piece as u8)
+                        let piece = game[pos];
+                        piece.piece_type() == (input.piece_type as u8)
                             && ((piece.color() == turn_to_use && !skip_check)
                                 || (skip_check && piece.color() != turn_to_use))
-                            && PieceMove::new(game[y][x], coords.is_capture, coords)
-                                .is_valid(game, None)
+                            && PieceMove::new(
+                                piece,
+                                input.end_position,
+                                input.is_capture,
+                                false,
+                                None,
+                            )
+                            .is_valid(game, input.piece_type)
                     })
-                    .map(|(x, y)| PieceMove::new(game[y][x], coords.is_capture, coords))
+                    .map(|pos| {
+                        PieceMove::new(game[pos], input.end_position, input.is_capture, false, None)
+                    })
                     .collect::<Vec<PieceMove>>();
 
                 match moves.len() {
@@ -147,68 +310,56 @@ impl PieceMove {
         }
     }
 
-    pub fn is_valid(&self, game: &Game, piece_type: Option<PieceType>) -> bool {
-        match if let Some(p_type) = piece_type {
-            p_type
-        } else {
-            self.end_coords.piece
-        } {
+    pub fn is_valid(&self, game: &Game, piece_type: PieceType) -> bool {
+        match piece_type {
             PieceType::Pawn => {
                 let y_move: isize = if game.turn == 0 { 1 } else { -1 };
 
                 (!self.is_capture &&
-                    (self.end_coords.y == (((self.piece.coords.y as isize) + y_move) as usize) ||
+                    (self.end_position.y == (((self.piece.position.y as isize) + y_move) as usize) ||
                         (self.piece.is_home_row() &&
-                            game.is_path(PiecePath::Straight, self.piece.coords, self.end_coords) &&
-                            self.end_coords.y ==
-                                (((self.piece.coords.y as isize) + y_move * 2) as usize))) &&
-                    self.end_coords.x == self.piece.coords.x &&
-                    game[self.end_coords].is_empty()) || // Capture
+                            game.is_path(PiecePath::Straight, self.piece.position, self.end_position) &&
+                            self.end_position.y ==
+                                (((self.piece.position.y as isize) + y_move * 2) as usize))) &&
+                    self.end_position.x == self.piece.position.x &&
+                    game[self.end_position].is_empty()) || // Capture
                     (self.is_capture &&
-                        self.end_coords.y == (((self.piece.coords.y as isize) + y_move) as usize) &&
-                        ((self.end_coords.x as isize) - (self.piece.coords.x as isize)).abs() ==
-                            1 &&
-                        !game[self.end_coords].is_empty() &&
-                        game[self.end_coords].color() != self.piece.color())
+                        self.end_position.y == (((self.piece.position.y as isize) + y_move) as usize) &&
+                        (self.en_passant || (((self.end_position.x as isize) - (self.piece.position.x as isize)).abs() ==
+                        1 && !game[self.end_position].is_empty() && // en croissant
+                        game[self.end_position].color() != self.piece.color())))
             }
             PieceType::Rook => {
-                ((self.end_coords.y != self.piece.coords.y
-                    && self.end_coords.x == self.piece.coords.x)
-                    || (self.end_coords.y == self.piece.coords.y
-                        && self.end_coords.x != self.piece.coords.x))
-                    && game.is_path(PiecePath::Straight, self.piece.coords, self.end_coords)
-                    && ((game[self.end_coords].is_empty() && !self.is_capture)
-                        || (!game[self.end_coords].is_empty()
+                ((self.end_position.y != self.piece.position.y
+                    && self.end_position.x == self.piece.position.x)
+                    || (self.end_position.y == self.piece.position.y
+                        && self.end_position.x != self.piece.position.x))
+                    && game.is_path(PiecePath::Straight, self.piece.position, self.end_position)
+                    && ((game[self.end_position].is_empty() && !self.is_capture)
+                        || (!game[self.end_position].is_empty()
                             && self.is_capture
-                            && game[self.end_coords].color() != self.piece.color()))
+                            && game[self.end_position].color() != self.piece.color()))
             }
-            PieceType::Knight => true, // The check for the knight is done in the move purging
+            PieceType::Knight => {
+                (!self.is_capture && game[self.end_position].is_empty())
+                    || (self.is_capture && game[self.end_position].color() != game.turn)
+            } // The check for the knight is done in the move purging
             PieceType::Bishop => {
-                println!("Bishop: {:?} -> {:?}", self.piece.coords, self.end_coords);
-                println!("{:?}", self);
-                println!(
-                    "empty: {}, capture: {}, colors: {}",
-                    !game[self.end_coords].is_empty(),
-                    self.is_capture,
-                    game[self.end_coords].color() != self.piece.color()
-                );
-                println!(
-                    "is_path: {}",
-                    game.is_path(PiecePath::Diagonal, self.piece.coords, self.end_coords)
-                );
-
-                game.is_path(PiecePath::Diagonal, self.piece.coords, self.end_coords)
-                    && ((!game[self.end_coords].is_empty()
+                game.is_path(PiecePath::Diagonal, self.piece.position, self.end_position)
+                    && ((!game[self.end_position].is_empty()
                         && self.is_capture
-                        && game[self.end_coords].color() != self.piece.color())
-                        || (game[self.end_coords].is_empty() && !self.is_capture))
+                        && game[self.end_position].color() != self.piece.color())
+                        || (game[self.end_position].is_empty() && !self.is_capture))
             }
-            PieceType::Queen => true,
+            PieceType::Queen => {
+                self.is_valid(game, PieceType::Bishop) || self.is_valid(game, PieceType::Rook)
+            }
             PieceType::King => {
-                (game[self.end_coords].is_empty() && !self.is_capture)
-                    || (!game[self.end_coords].is_empty()
+                (game[self.end_position].is_empty() && !self.is_capture)
+                    || (!game[self.end_position].is_empty()
                         && self.is_capture
-                        && game[self.end_coords].color() != self.piece.color())
+                        && game[self.end_position].color() != self.piece.color())
+                    || self.castling.is_some()
             }
             _ => unreachable!(),
         }
@@ -221,45 +372,65 @@ pub enum PiecePath {
 }
 
 fn generate_bishop_moves(
-    coords: Coords,
+    input: Input,
     game: &Game,
     skip_check: bool,
     turn_to_use: u8,
 ) -> Vec<PieceMove> {
-    get_bishop_moves(&coords)
+    inv_for_bishop(&input)
         .into_iter()
-        .filter(|&(x, y)| {
-            if y > 7 || x > 7 {
+        .filter(|&position| {
+            if position.y > 7 || position.x > 7 {
                 return false;
             }
-            let piece = game[y][x];
-            piece.piece_type() == (coords.piece as u8)
+            let piece = game[position];
+            piece.piece_type() == (input.piece_type as u8)
                 && ((piece.color() == turn_to_use && !skip_check)
                     || (skip_check && piece.color() != turn_to_use))
-                && PieceMove::new(game[y][x], coords.is_capture, coords)
-                    .is_valid(game, Some(PieceType::Bishop))
+                && PieceMove::new(
+                    game[position],
+                    input.end_position,
+                    input.is_capture,
+                    false,
+                    None,
+                )
+                .is_valid(game, PieceType::Bishop)
         })
-        .map(|(x, y)| PieceMove::new(game[y][x], coords.is_capture, coords))
+        .map(|position| {
+            PieceMove::new(
+                game[position],
+                input.end_position,
+                input.is_capture,
+                false,
+                None,
+            )
+        })
         .collect::<Vec<PieceMove>>()
 }
 
 fn generate_rook_moves(
-    coords: Coords,
+    input: Input,
     game: &Game,
     skip_check: bool,
     turn_to_use: u8,
 ) -> Vec<PieceMove> {
-    get_rook_moves(&coords)
+    inv_for_rook(&input)
         .iter()
-        .map(|(x, y)| (*x, *y))
-        .filter_map(|(x, y)| {
-            let piece = game[y][x];
-            if piece.piece_type() == (coords.piece as u8)
+        .filter_map(|&position| {
+            let piece = game[position];
+            if piece.piece_type() == (input.piece_type as u8)
                 && ((piece.color() == turn_to_use && !skip_check)
                     || (skip_check && piece.color() != turn_to_use))
-                && PieceMove::new(piece, coords.is_capture, coords).is_valid(game, None)
+                && PieceMove::new(piece, input.end_position, input.is_capture, false, None)
+                    .is_valid(game, input.piece_type)
             {
-                Some(PieceMove::new(piece, coords.is_capture, coords))
+                Some(PieceMove::new(
+                    piece,
+                    input.end_position,
+                    input.is_capture,
+                    false,
+                    None,
+                ))
             } else {
                 None
             }

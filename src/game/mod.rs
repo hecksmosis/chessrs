@@ -11,6 +11,7 @@ pub struct Game {
     pub check: Checks,
     pub king_positions: [Position; 2],
     pub moves: Moves,
+    pub hash_history: Vec<[u64; 4]>,
 }
 
 impl Display for Game {
@@ -26,130 +27,81 @@ impl Display for Game {
     }
 }
 
+pub enum GameResult {
+    Win(u8),
+    Draw,
+    InProgress(Result<(), Box<dyn Error>>),
+}
+
+impl GameResult {
+    pub fn unwrap_err_as_string(&self) -> String {
+        match self {
+            InProgress(r) =>
+                match r {
+                    Ok(_) => panic!("GameResult::unwrap_error called on non-error"),
+                    Err(e) => e.to_string(),
+                }
+            _ => panic!("GameResult::unwrap_error called on non-error"),
+        }
+    }
+}
+
 type MoveResult = Result<(), String>;
 
 impl Game {
-    pub fn make_move(&mut self, input: Input) -> MoveResult {
-        let previous_position = match PieceMove::from_piece_type(input, self, false, self.turn) {
-            Ok(x) => {
-                println!("{:?}", x);
-                x
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        if !previous_position.is_valid(self, input.piece_type) {
+    pub fn make_pmove(&mut self, mut pmove: PMove) -> MoveResult {
+        if !pmove.fill_start_position(self) {
             return Err("Invalid move".to_string());
         }
 
-        let piece = self.move_piece(&previous_position, &input);
-        if self.is_king_in_check()[self.turn] {
-            self.revert_move(&previous_position, &input, piece);
-            return Err("Invalid move, king in check".to_string());
-        } else if input.castling != 0
-            && PieceType::iter().any(|piece_type| {
-                self.is_attacked(
-                    Input {
-                        piece_type,
-                        is_capture: true,
-                        end_position: self.get_rook_pos(&input),
-                        castling: 0,
-                    },
-                    self.turn,
-                )
-            })
-        {
-            self.revert_move(&previous_position, &input, piece);
-            return Err("Invalid move, king in check".to_string());
+        self.piece_pmove(pmove);
+        if pmove.piece_type() == PieceType::King {
+            self.update_king_pos(pmove.end_position());
         }
 
-        self.moves.push(previous_position);
+        self.moves.push(pmove);
+        self.hash_history.push(self.serialize_to_ints());
         self.check = self.is_king_in_check();
         self.turn ^= 1;
         Ok(())
     }
 
-    fn empty<T>(&mut self, position: T)
-    where
-        T: Into<Position> + Copy,
-    {
-        self[position.into()] = Piece::empty(position.into());
-    }
-
-    fn move_piece(&mut self, previous_move: &PieceMove, input: &Input) -> Piece {
-        println!(
-            "Coords: {}, previos_position: {}",
-            input.end_position, previous_move.piece.position
-        );
-        if previous_move.en_passant {
-            let turn = self.turn;
-            self.empty(
-                input.end_position.with_y(
-                    (input.end_position.y as isize + if turn == 0 { -1 } else { 1 }) as usize,
-                ),
-            );
-        }
-        let color_mask = if self.turn == 1 { 0b1000 } else { 0 };
-        let piece = Piece::from_position((input.piece_type as u8) ^ color_mask, input.end_position);
-        if let Some((king, rook)) = previous_move.castling {
-            self.empty(previous_move.piece.position);
-            let rook_pos = self.get_rook_pos(input);
-            self.empty(rook_pos);
-            self[king] = previous_move.piece;
-            self[rook] = Piece::new(0b10 ^ color_mask, (rook.x, rook.y));
-        } else {
-            println!("prev piece position: {:?}", previous_move.piece.position);
-            self.empty(previous_move.piece.position);
-            self[input.end_position] = piece;
-        }
-        if piece.piece_type() == (PieceType::King as u8) {
-            self.king_positions[self.turn as usize] = input.end_position;
+    fn piece_pmove(&mut self, pmove: PMove) {
+        if pmove.is_capture() && self[pmove.end_position()].is_empty() {
+            self.empty(pmove.end_position().with_y(pmove.start_position().y));
         }
 
-        piece
-    }
-
-    fn revert_move(&mut self, previous_move: &PieceMove, input: &Input, piece: Piece) {
-        if let Some((king, rook)) = previous_move.castling {
-            self.empty(king);
-            self.empty(rook);
-            self[previous_move.piece.position] = previous_move.piece;
-            let prev_rook_pos: Position = match (self.turn, input.castling) {
-                (0, 1) => (7usize, 0).into(),
-                (0, 2) => (0usize, 0).into(),
-                (1, 1) => (7usize, 7).into(),
-                (1, 2) => (0usize, 7).into(),
-                (_, _) => unreachable!(),
+        let final_piece = Piece::from_position(pmove.byte(self), pmove.end_position());
+        if
+            let Some((king_pos, rook_pos)) =
+                CASTLING[(self.turn * 2 + pmove.castling() * 3) as usize]
+        {
+            let (king_mask, rook_mask) = match self.turn {
+                0 => (0b0110, 0b0010),
+                1 => (0b1110, 0b1010),
+                _ => unreachable!(),
             };
-            let color_mask = if self.turn == 1 { 0b1000 } else { 0 };
-            self[prev_rook_pos] = Piece::new(0b10 ^ color_mask, (prev_rook_pos.x, prev_rook_pos.y));
+            self[king_pos] = Piece::from_position(king_mask, king_pos.into());
+            self[rook_pos] = Piece::from_position(rook_mask, rook_pos.into());
         } else {
-            self[previous_move.piece.position] = previous_move.piece;
-            self.empty(input.end_position);
-        }
-
-        if piece.piece_type() == PieceType::King as u8 {
-            self.king_positions[self.turn as usize] = previous_move.piece.position;
+            self[pmove.end_position()] = final_piece;
+            self.empty(pmove.start_position());
         }
     }
 
-    fn get_rook_pos(&self, input: &Input) -> Position {
-        match (self.turn, input.castling) {
-            (0, 1) => (7usize, 0).into(),
-            (0, 2) => (0usize, 0).into(),
-            (1, 1) => (7usize, 7).into(),
-            (1, 2) => (0usize, 7).into(),
-            (_, _) => unreachable!(),
-        }
+    fn update_king_pos(&mut self, king_pos: Position) {
+        self.king_positions[self.turn as usize] = king_pos;
+    }
+
+    fn empty<T>(&mut self, position: T) where T: Into<Position> + Copy {
+        self[position.into()] = Piece::empty(position.into());
     }
 
     pub fn is_path(
         &self,
         path_type: PiecePath,
         start_position: Position,
-        end_position: Position,
+        end_position: Position
     ) -> bool {
         match path_type {
             PiecePath::Straight => {
@@ -159,18 +111,14 @@ impl Game {
                     } else {
                         end_position.y + 1..start_position.y
                     };
-                    return range
-                        .step_by(1)
-                        .all(|y| self[(start_position.x, y)].is_empty());
+                    return range.step_by(1).all(|y| self[(start_position.x, y)].is_empty());
                 } else if start_position.y == end_position.y {
                     let range = if start_position.x < end_position.x {
                         start_position.x + 1..end_position.x
                     } else {
                         end_position.x + 1..start_position.x
                     };
-                    return range
-                        .step_by(1)
-                        .all(|x| self[(x, start_position.y)].is_empty());
+                    return range.step_by(1).all(|x| self[(x, start_position.y)].is_empty());
                 }
                 false
             }
@@ -179,23 +127,16 @@ impl Game {
                     return false;
                 }
                 let (step_x, step_y) = (
-                    if start_position.x < end_position.x {
-                        1
-                    } else {
-                        -1
-                    },
-                    if start_position.y < end_position.y {
-                        1
-                    } else {
-                        -1
-                    },
+                    if start_position.x < end_position.x { 1 } else { -1 },
+                    if start_position.y < end_position.y { 1 } else { -1 },
                 );
                 let (mut x, mut y) = (
-                    start_position.x as isize + step_x,
-                    start_position.y as isize + step_y,
+                    (start_position.x as isize) + step_x,
+                    (start_position.y as isize) + step_y,
                 );
-                while (x, y) != end_position.into()
-                    && Game::in_bounds((x as usize, y as usize).into())
+                while
+                    (x, y) != end_position.into() &&
+                    Game::in_bounds((x as usize, y as usize).into())
                 {
                     if !self[(x as usize, y as usize)].is_empty() {
                         return false;
@@ -208,35 +149,18 @@ impl Game {
         }
     }
 
-    pub fn is_king_in_check(&mut self) -> Checks {
-        [0, 1]
+    pub fn is_king_in_check(&self) -> Checks {
+        self.king_positions
             .iter()
-            .map(|color| {
-                PieceType::iter().any(|piece_type| {
-                    self.is_attacked(self.get_check_move_coords(piece_type, *color), *color)
-                })
-            })
-            .collect::<Checks>()
+            .map(|pos| self.position_attacked(*pos))
+            .collect()
     }
 
-    fn get_check_move_coords(&self, piece_type: PieceType, color: u8) -> Input {
-        let end_position = if color == 0 {
-            self.king_positions[0]
-        } else {
-            self.king_positions[1]
-        };
-        Input {
-            piece_type,
-            is_capture: true,
-            end_position,
-            castling: 0,
-        }
-    }
-
-    fn is_attacked(&mut self, input: Input, color: u8) -> bool {
-        PieceMove::from_piece_type(input, self, true, color)
-            .map(|attacker_move| attacker_move.is_valid(self, input.piece_type))
-            .unwrap_or(false)
+    pub fn position_attacked(&self, end_position: Position) -> bool {
+        PieceType::iter().any(|p_type| {
+            let mut p_move = PMove::partial(0, end_position.to_byte(), p_type as u8, true, 0, 0);
+            p_move.fill_start_position(self)
+        })
     }
 
     pub fn in_bounds(pos: Position) -> bool {
@@ -247,48 +171,49 @@ impl Game {
         &self.board
     }
 
-    pub fn check_win(&mut self) -> bool {
-        self.get_blocking_moves();
-        true
-    }
-
-    pub fn get_blocking_moves(&mut self) -> bool {
-        // Get every valid move from every piece
-        let moves = self.get_all_moves();
-        println!(
-            "Getting all moves: {:?}",
-            moves
+    pub fn check_draw(&self) -> bool {
+        // Check if only pieces left are kings
+        if
+            self.board
                 .iter()
-                .map(|x| match x.piece.piece_type().into() {
-                    PieceType::Pawn => "P",
-                    PieceType::Knight => "N",
-                    PieceType::Bishop => "B",
-                    PieceType::Rook => "R",
-                    PieceType::Queen => "Q",
-                    PieceType::King => "K",
-                    PieceType::None => "None",
-                }
-                .to_owned()
-                    + &x.end_position.to_string())
-                .collect::<Vec<String>>()
-        );
+                .flat_map(|row| row.iter())
+                .all(|piece| (piece.is_empty() || piece.piece_type() == (PieceType::King as u8)))
+        {
+            return true;
+        }
 
-        moves
-            .iter()
-            .filter(|&x| {
-                self.make_move(Input {
-                    piece_type: x.piece.piece_type().into(),
-                    is_capture: x.is_capture,
-                    end_position: x.end_position,
-                    castling: 0,
-                });
-                self.is_king_in_check()[self.turn]
-            })
-            .for_each(|x| {
-                println!("Blocking move: {:?}", x);
-            });
+        // Check if same position has been repeated 3 times
+        if
+            self.hash_history
+                .iter()
+                .filter(|pos| **pos == self.serialize_to_ints())
+                .count() >= 3
+        {
+            return true;
+        }
+
+        // Check if 50 moves have been made without a capture or pawn move
+        let last_50 = self.moves.last_50();
+        if
+            last_50.len() == 50 &&
+            last_50.iter().all(|x| x.piece_type() != PieceType::Pawn) &&
+            last_50.iter().all(|x| !x.is_capture())
+        {
+            return true;
+        }
+
+        // TODO: Stalemate
 
         false
+    }
+
+    pub fn check_win(&mut self) -> bool {
+        self.get_valid_moves().len() == 0
+    }
+
+    pub fn get_valid_moves(&mut self) -> Vec<PMove> {
+        //TODO
+        todo!()
     }
 
     pub fn get_all_moves(&mut self) -> Vec<PieceMove> {
@@ -300,9 +225,19 @@ impl Game {
                 }
 
                 let piece_moves = PieceMove::from_piece(self[(x, y)], self);
-                moves.extend(piece_moves)
+                moves.extend(piece_moves);
             }
         }
         moves
+    }
+
+    pub fn serialize_to_ints(&self) -> [u64; 4] {
+        let mut ints = [0u64; 4];
+        for (i, row) in self.board.iter().enumerate() {
+            for (j, piece) in row.iter().enumerate() {
+                ints[i / 2] |= (piece.byte as u64) << (64 - ((j + 1) * 4 + ((i + 1) % 2) * 32));
+            }
+        }
+        ints
     }
 }

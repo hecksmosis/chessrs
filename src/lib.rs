@@ -1,5 +1,5 @@
 pub use eval::*;
-pub use game::{checks::*, default::*, *};
+pub use game::{ checks::*, default::*, *, GameResult::* };
 pub use input::*;
 pub use moves::*;
 pub use piece::*;
@@ -8,8 +8,8 @@ pub use std::{
     array,
     convert::TryInto,
     error::Error,
-    fmt::{Debug, Display, Formatter, Result as fmtResult},
-    io::{self, Write},
+    fmt::{ Debug, Display, Formatter, Result as fmtResult },
+    io::{ self, Write },
 };
 
 mod eval;
@@ -21,49 +21,63 @@ mod position;
 #[cfg(test)]
 mod tests;
 
-pub fn main_loop() -> ! {
+pub fn main_loop() -> Result<bool, Box<dyn Error>> {
     let mut game = Game::default();
     println!("{}", game);
 
     loop {
         print!(
             "Enter move for {} (id: {}): ",
-            if game.turn == 0 { "white" } else { "black" },
+            if game.turn == 0 {
+                "white"
+            } else {
+                "black"
+            },
             game.turn
         );
-        io::stdout().flush().unwrap();
+        io::stdout().flush()?;
         let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
+        io::stdin().read_line(&mut input)?;
 
-        println!(
-            "{}",
-            match handle_input(&mut game, &mut input) {
-                Ok(_) => "Move successful".to_string(),
-                Err(e) => e.to_string(),
-            }
-        );
+        let out = match handle_input(&mut game, &mut input) {
+            Win(winner) => format!("{} wins", if winner == 0 { "white" } else { "black" }),
+            Draw => "Game drawn".to_string(),
+            InProgress(r) =>
+                match r {
+                    Ok(_) => "Move succesful".to_string(),
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+        };
+
+        println!("{}", out);
     }
 }
 
-fn handle_input(game: &mut Game, input: &mut String) -> Result<(), Box<dyn Error>> {
-    let coords = match Input::build(input.trim()) {
-        Ok(coords) => coords,
+fn handle_input(game: &mut Game, input: &mut String) -> GameResult {
+    let input = match Input::build(input.trim()) {
+        Ok(input) => input,
         Err(e) => {
-            return Err(e.into());
+            return InProgress(Err(e.into()));
         }
     };
 
-    match game.make_move(coords) {
+    match game.make_move(input) {
         Ok(_) => {
             dbg!(&game.check);
             println!("{}", game);
             println!("{}", Eval::from(&game));
-            let _ = game.check_win();
+            if game.check_win() {
+                return Win(game.turn);
+            } else if game.check_draw() {
+                return Draw;
+            }
         }
         Err(e) => {
-            return Err(e.into());
+            return InProgress(Err(e.into()));
         }
-    };
+    }
 
-    Ok(())
+    InProgress(Ok(()))
 }

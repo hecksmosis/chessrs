@@ -2,10 +2,16 @@ use crate::*;
 pub use inverse_moves::*;
 pub use moves::*;
 pub use piece_move::*;
+pub use bin_move::*;
+pub use move_lists::*;
+pub use direct_move_lists::*;
 
 mod inverse_moves;
 mod moves;
 mod piece_move;
+mod move_lists;
+mod direct_move_lists;
+mod bin_move;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Piece {
@@ -38,8 +44,8 @@ impl Piece {
     }
 
     pub fn is_home_row(&self) -> bool {
-        (self.position.y == 1 && self.byte == 0b0001)
-            || (self.position.y == 6 && self.byte == 0b1001)
+        (self.position.y == 1 && self.byte == 0b0001) ||
+            (self.position.y == 6 && self.byte == 0b1001)
     }
 
     pub fn empty(position: Position) -> Self {

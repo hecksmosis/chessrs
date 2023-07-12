@@ -66,9 +66,20 @@ fn handle_input_test() {
     let mut game = Game::default();
 
     assert_eq!(
-        handle_input(&mut game, &mut "w7".to_string())
-            .unwrap_err()
-            .to_string(),
+        handle_input(&mut game, &mut "w7".to_string()).unwrap_err_as_string(),
         "Invalid x coordinate"
     );
+}
+
+#[test]
+fn fool_mate_test() -> Result<(), Box<dyn Error>> {
+    let mut game = Game::default();
+
+    assert_eq!(game.make_move(Input::build("f3")?).is_ok(), true);
+    assert_eq!(game.make_move(Input::build("e5")?).is_ok(), true);
+    assert_eq!(game.make_move(Input::build("g4")?).is_ok(), true);
+    assert_eq!(game.make_move(Input::build("qh4")?).is_ok(), true);
+    assert_eq!(game.check_win(), true);
+
+    Ok(())
 }

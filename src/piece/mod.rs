@@ -1,14 +1,10 @@
 use crate::*;
-pub use inverse_moves::*;
 pub use moves::*;
-pub use piece_move::*;
 pub use bin_move::*;
 pub use move_lists::*;
 pub use direct_move_lists::*;
 
-mod inverse_moves;
 mod moves;
-mod piece_move;
 mod move_lists;
 mod direct_move_lists;
 mod bin_move;

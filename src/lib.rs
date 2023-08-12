@@ -56,14 +56,14 @@ pub fn main_loop() -> Result<bool, Box<dyn Error>> {
 }
 
 fn handle_input(game: &mut Game, input: &mut String) -> GameResult {
-    let input = match Input::build(input.trim()) {
+    let input = match input!(input.trim()) {
         Ok(input) => input,
         Err(e) => {
             return InProgress(Err(e.into()));
         }
     };
 
-    match game.make_move(input) {
+    match game.make_pmove(input) {
         Ok(_) => {
             dbg!(&game.check);
             println!("{}", game);

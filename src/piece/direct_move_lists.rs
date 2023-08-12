@@ -1,5 +1,11 @@
 use crate::*;
 
+macro_rules! new_move {
+    ($coords:expr, $checker:expr) => {
+        PossibleMove::new($coords, $checker)
+    };
+}
+
 pub struct PossibleMove {
     pub diff: (i8, i8),
     pub capture: bool,
@@ -54,36 +60,53 @@ pub const POSSIBLE_BLACK_PAWN_MOVES: [PossibleMove; 4] = [
     PossibleMove::with_capture((-1, -1), true, pawn_capture_checker),
 ];
 
-pub const POSSIBLE_ROOK_MOVES: [PossibleMove; 28] = [
-    PossibleMove::new((-7, 0), rook_checker),
-    PossibleMove::new((-6, 0), rook_checker),
-    PossibleMove::new((-5, 0), rook_checker),
-    PossibleMove::new((-4, 0), rook_checker),
-    PossibleMove::new((-3, 0), rook_checker),
-    PossibleMove::new((-2, 0), rook_checker),
-    PossibleMove::new((-1, 0), rook_checker),
-    PossibleMove::new((1, 0), rook_checker),
-    PossibleMove::new((2, 0), rook_checker),
-    PossibleMove::new((3, 0), rook_checker),
-    PossibleMove::new((4, 0), rook_checker),
-    PossibleMove::new((5, 0), rook_checker),
-    PossibleMove::new((6, 0), rook_checker),
-    PossibleMove::new((7, 0), rook_checker),
-    PossibleMove::new((0, -7), rook_checker),
-    PossibleMove::new((0, -6), rook_checker),
-    PossibleMove::new((0, -5), rook_checker),
-    PossibleMove::new((0, -4), rook_checker),
-    PossibleMove::new((0, -3), rook_checker),
-    PossibleMove::new((0, -2), rook_checker),
-    PossibleMove::new((0, -1), rook_checker),
-    PossibleMove::new((0, 1), rook_checker),
-    PossibleMove::new((0, 2), rook_checker),
-    PossibleMove::new((0, 3), rook_checker),
-    PossibleMove::new((0, 4), rook_checker),
-    PossibleMove::new((0, 5), rook_checker),
-    PossibleMove::new((0, 6), rook_checker),
-    PossibleMove::new((0, 7), rook_checker),
+pub const POSSIBLE_KNIGHT_MOVES: [PossibleMove; 8] = [
+    PossibleMove::new((1, 2), |_, _, _| true),
+    PossibleMove::new((2, 1), |_, _, _| true),
+    PossibleMove::new((2, -1), |_, _, _| true),
+    PossibleMove::new((1, -2), |_, _, _| true),
+    PossibleMove::new((-1, -2), |_, _, _| true),
+    PossibleMove::new((-2, -1), |_, _, _| true),
+    PossibleMove::new((-2, 1), |_, _, _| true),
+    PossibleMove::new((-1, 2), |_, _, _| true),
 ];
+
+pub const POSSIBLE_KING_MOVES: [PossibleMove; 8] = [
+    PossibleMove::new((1, 1), |_, _, _| true),
+    PossibleMove::new((1, 0), |_, _, _| true),
+    PossibleMove::new((1, -1), |_, _, _| true),
+    PossibleMove::new((0, 1), |_, _, _| true),
+    PossibleMove::new((0, -1), |_, _, _| true),
+    PossibleMove::new((-1, 1), |_, _, _| true),
+    PossibleMove::new((-1, 0), |_, _, _| true),
+    PossibleMove::new((-1, -1), |_, _, _| true),
+];
+
+pub const DEFAULT_MOVE: PossibleMove = PossibleMove::new((0, 0), |_, _, _| true);
+
+macro_rules! generate_moves {
+    ($name:ident, $diff:expr, $checker:expr) => {
+        pub const $name: [PossibleMove; 28] = {
+            let mut arr = [DEFAULT_MOVE; 28];
+            let mut index = 0;
+            let mut i = -7;
+            while i <= 7 {
+                if i == 0 {
+                    i+=1;
+                    continue;
+                }
+                arr[index] = new_move!((i * $diff.0, i * $diff.1), $checker);
+                arr[index + 14] = new_move!((-i * $diff.0, i * $diff.1), $checker);
+                index += 1;
+                i+=1;
+            }
+            arr
+        };
+    };
+}
+
+generate_moves!(POSSIBLE_ROOK_MOVES, (1, 0), rook_checker);
+generate_moves!(POSSIBLE_BISHOP_MOVES, (1, 1), rook_checker);
 
 fn pawn_capture_checker(start: Position, end: Position, game: &Game) -> bool {
     let end_piece = game[end];

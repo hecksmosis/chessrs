@@ -13,14 +13,25 @@ impl PossibleBacktrace {
     pub fn check(&self, pmove: &PMove, game: &Game) -> bool {
         let start_position = pmove.end_position() - self.diff;
         let start_piece = game[start_position];
-        Game::in_bounds(start_position) &&
-            (self.checker)(start_position, pmove, game) &&
-            start_piece.byte == pmove.byte(game) &&
-            !(
-                game.position_attacked(game.king_positions[game.turn as usize]) ||
-                (pmove.piece_type() == PieceType::King &&
-                    game.position_attacked(pmove.end_position()))
-            )
+        let checker_value = (self.checker)(start_position, pmove, game);
+        let check =
+            pmove.piece_type() == PieceType::King && game.position_attacked(pmove.end_position());
+        let check2 = game.position_attacked(game.king_positions[game.turn as usize]);
+        println!(
+            "checker: {checker_value}, byte: {}, check: {check} check2: {check2}",
+            start_piece.byte == pmove.byte(game)
+        );
+
+        // Game::in_bounds(start_position) &&
+        //     checker_value &&
+        //     start_piece.byte == pmove.byte(game) &&
+        //     !(
+        //         game.position_attacked(game.king_positions[game.turn as usize]) ||
+        //         (pmove.piece_type() == PieceType::King &&
+        //             game.position_attacked(pmove.end_position()))
+        //     )
+
+        true
     }
 }
 

@@ -89,6 +89,12 @@ impl Game {
         }
     }
 
+    pub fn castling_allowed(&self, king_pos: (usize, usize), rook_pos: (usize, usize)) -> bool {
+        self.position_attacked(king_pos.into()) ||
+            self.position_attacked(rook_pos.into()) ||
+            self.is_king_in_check()[self.turn]
+    }
+
     fn update_king_pos(&mut self, king_pos: Position) {
         self.king_positions[self.turn as usize] = king_pos;
     }
@@ -203,20 +209,18 @@ impl Game {
         }
 
         // TODO: Stalemate
+        if self.get_valid_moves().len() == 0 && !self.check_win() {
+            return true;
+        }
 
         false
     }
 
-    pub fn check_win(&mut self) -> bool {
-        self.get_valid_moves().len() == 0
+    pub fn check_win(&self) -> bool {
+        self.get_valid_moves().len() == 0 && self.check[self.turn as usize]
     }
 
-    pub fn get_valid_moves(&mut self) -> Vec<PMove> {
-        //TODO
-        todo!()
-    }
-
-    pub fn get_all_moves(&mut self) -> Vec<PieceMove> {
+    pub fn get_valid_moves(&self) -> Vec<PMove> {
         let mut moves = Vec::new();
         for y in 0..8usize {
             for x in 0..8 {
@@ -224,7 +228,7 @@ impl Game {
                     continue;
                 }
 
-                let piece_moves = PieceMove::from_piece(self[(x, y)], self);
+                let piece_moves = PMove::for_piece((x, y).into(), self[(x, y)], self);
                 moves.extend(piece_moves);
             }
         }

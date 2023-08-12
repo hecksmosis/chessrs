@@ -30,6 +30,7 @@ impl Input {
         }
 
         let mut chars = s.chars();
+        println!("{}", s.len());
         let piece_type = if s.len() == 2 {
             PieceType::Pawn
         } else {

@@ -5,7 +5,7 @@ fn pawn_move() {
     let mut game = Game::default();
 
     assert_eq!(game.turn, 0);
-    assert_eq!(game.make_move(Input::build("e4").unwrap()).is_ok(), true);
+    assert_eq!(game.make_pmove(PMove::from_input("e4").unwrap()).is_ok(), true);
     assert_eq!(game.turn, 1);
     let mut e4_board = create_board();
     e4_board[4][4] = Piece::new(0b1, (4, 3));
@@ -19,25 +19,25 @@ fn king_pawn_game() -> Result<(), String> {
     let mut game = Game::default();
 
     assert_eq!(game.turn, 0);
-    assert_eq!(game.make_move(Input::build("e4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("e5")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("nf3")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("nc6")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("bc4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("bc5")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("c3")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("nf6")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("d4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("pxd4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("pxd4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("bb4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("bd2")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("nxe4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("bxb4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("nxb4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("d5")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("c5")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("pxc6")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("e4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("e5")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("nf3")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("nc6")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("bc4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("bc5")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("c3")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("nf6")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("d4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("pxd4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("pxd4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("bb4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("bd2")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("nxe4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("bxb4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("nxb4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("d5")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("c5")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("pxc6")?).is_ok(), true);
     assert_eq!(game.turn, 1);
     let mut final_board = create_board();
     final_board[5][5] = Piece::new(0b11, (5, 2));
@@ -75,11 +75,23 @@ fn handle_input_test() {
 fn fool_mate_test() -> Result<(), Box<dyn Error>> {
     let mut game = Game::default();
 
-    assert_eq!(game.make_move(Input::build("f3")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("e5")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("g4")?).is_ok(), true);
-    assert_eq!(game.make_move(Input::build("qh4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("f3")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("e5")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("g4")?).is_ok(), true);
+    assert_eq!(game.make_pmove(input!("qh4")?).is_ok(), true);
     assert_eq!(game.check_win(), true);
 
     Ok(())
+}
+
+#[test] //TODO: FIX
+//#[should_panic]
+fn valid_moves_test() {
+    let game = Game::default();
+
+    game.get_valid_moves()
+        .iter()
+        .for_each(|pmove| println!("{:0b}", pmove.0));
+
+    assert_eq!(false, true)
 }

@@ -20,6 +20,11 @@ pub const PROMOTIONS: [PieceType; 5] = [
     PieceType::Queen,
 ];
 
+pub enum PiecePath {
+    Straight,
+    Diagonal,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct PMove(pub u32);
 
@@ -60,13 +65,81 @@ impl PMove {
                             piece.piece_type(),
                             m.capture,
                             0,
-                            101
+                            if
+                                (position.x == 7 && game.turn == 1) ||
+                                (position.x == 1 && game.turn == 0)
+                            {
+                                PieceType::Queen as u8
+                            } else {
+                                0
+                            }
                         )
                     )
                     .collect()
             }
             PieceType::Rook => {
                 POSSIBLE_ROOK_MOVES.iter()
+                    .filter(|m| m.check(position, game))
+                    .map(|m|
+                        PMove::partial(
+                            position.to_byte(),
+                            (position + m.diff).to_byte(),
+                            piece.piece_type(),
+                            m.capture,
+                            0,
+                            0
+                        )
+                    )
+                    .collect()
+            }
+            PieceType::Bishop => {
+                POSSIBLE_BISHOP_MOVES.iter()
+                    .filter(|m| m.check(position, game))
+                    .map(|m|
+                        PMove::partial(
+                            position.to_byte(),
+                            (position + m.diff).to_byte(),
+                            piece.piece_type(),
+                            m.capture,
+                            0,
+                            0
+                        )
+                    )
+                    .collect()
+            }
+            PieceType::Queen => {
+                POSSIBLE_BISHOP_MOVES.iter()
+                    .chain(POSSIBLE_ROOK_MOVES.iter())
+                    .filter(|m| m.check(position, game))
+                    .map(|m|
+                        PMove::partial(
+                            position.to_byte(),
+                            (position + m.diff).to_byte(),
+                            piece.piece_type(),
+                            m.capture,
+                            0,
+                            0
+                        )
+                    )
+                    .collect()
+            }
+            PieceType::Knight => {
+                POSSIBLE_KNIGHT_MOVES.iter()
+                    .filter(|m| m.check(position, game))
+                    .map(|m|
+                        PMove::partial(
+                            position.to_byte(),
+                            (position + m.diff).to_byte(),
+                            piece.piece_type(),
+                            m.capture,
+                            0,
+                            0
+                        )
+                    )
+                    .collect()
+            }
+            PieceType::King => {
+                POSSIBLE_KING_MOVES.iter()
                     .filter(|m| m.check(position, game))
                     .map(|m|
                         PMove::partial(
@@ -93,7 +166,7 @@ impl PMove {
     }
 
     pub fn start_position(&self) -> Position {
-        Position::from_byte((self.0 & (0b111111 << 6)) as u8)
+        Position::from_byte(((self.0 & (0b111111 << 6)) as u8) >> 6)
     }
 
     pub fn piece_type_raw(&self) -> u8 {
@@ -124,6 +197,7 @@ impl PMove {
     }
 
     pub fn fill_start_position(&mut self, game: &Game) -> bool {
+        println!("fill start position");
         match &self.piece_type() {
             PieceType::Pawn => {
                 let moves = (
@@ -202,11 +276,7 @@ impl PMove {
                     let Some((king_pos, rook_pos)) =
                         CASTLING[(game.turn * 2 + self.castling() * 3) as usize]
                 {
-                    if
-                        game.position_attacked(king_pos.into()) ||
-                        game.position_attacked(rook_pos.into()) ||
-                        game.is_king_in_check()[game.turn]
-                    {
+                    if game.castling_allowed(king_pos, rook_pos) {
                         return false;
                     }
                     return true;
@@ -243,15 +313,19 @@ impl PMove {
         }
 
         let mut chars = input.chars();
-        let piece_type = match chars.next().unwrap() {
-            'p' => PieceType::Pawn,
-            'r' => PieceType::Rook,
-            'n' => PieceType::Knight,
-            'b' => PieceType::Bishop,
-            'q' => PieceType::Queen,
-            'k' => PieceType::King,
-            _ => {
-                return Err("Invalid piece".to_string());
+        let piece_type = if input.len() == 2 {
+            PieceType::Pawn
+        } else {
+            match chars.next().unwrap() {
+                'p' => PieceType::Pawn,
+                'r' => PieceType::Rook,
+                'n' => PieceType::Knight,
+                'b' => PieceType::Bishop,
+                'q' => PieceType::Queen,
+                'k' => PieceType::King,
+                _ => {
+                    return Err("Invalid piece".to_string());
+                }
             }
         };
 
@@ -309,4 +383,40 @@ impl PMove {
 
         Ok(partial_move)
     }
+}
+
+impl std::fmt::Display for PMove {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        if self.castling() != 0 {
+            if self.castling() == 1 { write!(f, "O-O") } else { write!(f, "O-O-O") }
+        } else {
+            let piece_type = match self.piece_type() {
+                PieceType::Pawn => "",
+                PieceType::Rook => "R",
+                PieceType::Knight => "N",
+                PieceType::Bishop => "B",
+                PieceType::Queen => "Q",
+                PieceType::King => "K",
+                _ => unreachable!(),
+            };
+            let capture = if self.is_capture() { "x" } else { "" };
+            let end_position = self.end_position();
+            let promotion = match self.promotion() {
+                PieceType::None => "",
+                PieceType::Rook => "=R",
+                PieceType::Knight => "=N",
+                PieceType::Bishop => "=B",
+                PieceType::Queen => "=Q",
+                _ => unreachable!(),
+            };
+            write!(f, "{}{}{}{}", piece_type, capture, end_position, promotion)
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! input {
+    ($input:expr) => {
+        PMove::from_input($input)
+    };
 }

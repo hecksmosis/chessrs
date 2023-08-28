@@ -138,8 +138,7 @@ pub const KING_MOVES: [PossibleBacktrace; 8] = [
 ];
 
 fn king_checker(_: Position, p_move: &PMove, game: &Game) -> bool {
-    check_valid_capture(p_move.is_capture(), &game[p_move.end_position()], game.turn) &&
-        !game.position_attacked(p_move.end_position())
+    check_valid_capture(p_move.is_capture(), &game[p_move.end_position()], game.turn)
 }
 
 fn bishop_checker(start: Position, p_move: &PMove, game: &Game) -> bool {
